@@ -1,118 +1,108 @@
-use serde::{Deserialize, Serialize};
-//use serde_json::Result;
-use tungstenite::{connect, Message};
-use clap::Parser;
-//use serde_json::json;
+use clap::{Parser, Subcommand};
 
-#[derive(Parser, Debug)]
-#[command()]
-struct Args {
+mod matter_api_client;
+mod messages;
 
-	#[arg(short, long, required=true)]
-	thread_data_tlv: String,
+use matter_api_client::MatterApiClient;
 
-	#[arg(short, long, required=true)]
-	matter_commission_code: String,
+#[derive(Subcommand)]
+enum Commands {
+    #[command(about = "Set's the given wifi credentials passed as parameter.", long_about = None)]
+    SetWifiCreds {
+        #[arg(short, help = "Pass the ssid")]
+        ssid: String,
 
-	#[arg(short, long, required=true)]
-	websocket_url: String
-	
+        #[arg(short, help = "Pass the PSK")]
+        psk: String,
+    },
+
+    #[command(about = "Set's the given thread credentials passed as parameter.", long_about = None)]
+    SetThreadCreds {
+        #[arg(short, help = "Pass the Thread Credentials TLV")]
+        tlv: String,
+    },
+
+    #[command(about = "Commission a device with code", long_about = None)]
+    CommissionWithCode {
+        #[arg(short, help = "Matter Commission Code")]
+        commission_code: String,
+    },
+
+    #[command(about = "Open a commissioning window", long_about = None)]
+    OpenCommissionWindow {
+        #[arg(short, help = "Open Commissioning Window for Node")]
+        node_id: String,
+    },
+
+    #[command(about = "Get all nodes", long_about = None)]
+    GetAllNodes {},
+
+    #[command(about = "Get Node Info", long_about = None)]
+    GetNode {
+        #[arg(short, help = "Get Node Infos")]
+        node_id: String,
+    },
+
+    #[command()]
+    Test {},
 }
 
-#[derive(Serialize, Deserialize)]
-struct Dataset {
-	dataset: String
-}
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct CommandLineArguments {
+    #[arg(short, long, required = true)]
+    websocket_url: String,
 
-#[derive(Serialize, Deserialize)]
-struct Code {
-	code: String
-}
-
-#[derive(Serialize, Deserialize)]
-struct MessageTlv {
-	message_id: String,
-	command: String,
-	args: Dataset
-}
-
-#[derive(Serialize, Deserialize)]
-struct MessageCommissionCode {
-	message_id: String,
-	command: String,
-	args: Code
-}
-
-fn get_msg_thread_credentials(thread_data_tlv: String) -> String {
-	let msg_dataset = Dataset {
-		dataset: thread_data_tlv.to_owned()
-	};
-
-	let msg_thread_credentials = MessageTlv {
-		message_id: "1".to_owned(),
-		command: "set_thread_dataset".to_owned(),
-		args: msg_dataset
-	};
-
-	let msg_thread_credentials = serde_json::to_string(&msg_thread_credentials).unwrap();
-
-	return msg_thread_credentials;
-}
-
-fn get_msg_commission_with_code(matter_commission_code: String) -> String {
-	let msg_code = Code {
-		code: matter_commission_code.to_owned()
-	};
-
-	let msg_message_commission_code = MessageCommissionCode {
-		message_id: "2".to_owned(),
-		command: "commission_with_code".to_owned(),
-		args: msg_code
-	};
-
-	let msg_commission_with_code = serde_json::to_string(&msg_message_commission_code).unwrap();
-
-	return msg_commission_with_code;
+    #[command(subcommand)]
+    command: Option<Commands>,
 }
 
 fn main() {
     env_logger::init();
 
-	let args = Args::parse();
+    println!("Home-Assistant Matter Add-On CLI");
+    println!("================================\n\n");
 
-	let thread_data_tlv: String = args.thread_data_tlv;
-	let matter_commission_code: String = args.matter_commission_code;
-	let websocket_url: String = args.websocket_url;
+    // Parse command line arguments and evaluate if all required Args are set
+    let cli = CommandLineArguments::parse();
+    let websocket_url: String = cli.websocket_url;
 
-	let msg_commission_with_code = get_msg_commission_with_code(matter_commission_code);
-	let msg_thread_credentials = get_msg_thread_credentials(thread_data_tlv);
-
-	println!("Starting up");
-	println!("Thread TLV: {}", thread_data_tlv);
-	println!("Matter Commission Code: {}", matter_commission_code);
-	println!("Home Assistant Matter WebSocket URL: {}", websocket_url);
-
-    let (mut socket, response) =
-        connect(websocket_url).expect("Can't connect");
-
-    println!("Connected to the server");
-    println!("Response HTTP code: {}", response.status());
-
-    let msg = socket.read().expect("Error reading message");
-    println!("Received: {}", msg);
-
-	println!();
-
-	println!("Sending Thread Credentials to the WebSocket Endpoint of the Matter Server.");
-    socket.send(Message::Text(msg_thread_credentials.to_string().into())).unwrap();
-    let msg = socket.read().expect("Error reading message");
-    println!("Received: {}", msg);
-
-	println!();
-
-    println!("Sending Commission with Code command to the WebSocket Endpoint of the Matter Server");
-    socket.send(Message::Text(msg_commission_with_code.to_string().into())).unwrap();
-    let msg = socket.read().expect("Error reading message");
-    println!("Received: {}", msg);
-    socket.close(None).ok();
+    match &cli.command {
+        Some(Commands::SetWifiCreds { ssid, psk }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_wifi_creds(ssid.to_string(), psk.to_string());
+            client.close();
+        }
+        Some(Commands::SetThreadCreds { tlv }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_thread_tlv(tlv.to_string());
+            client.close();
+        }
+        Some(Commands::CommissionWithCode { commission_code }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_commission_with_code(commission_code.to_string());
+            client.close();
+        }
+        Some(Commands::OpenCommissionWindow { node_id }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_open_commission_window(node_id.to_string());
+            client.close();
+        }
+        Some(Commands::GetAllNodes {}) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_get_nodes();
+            client.close();
+        }
+        Some(Commands::GetNode { node_id }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_get_node(node_id.to_string());
+            client.close();
+        }
+        Some(Commands::Test {}) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.test();
+            client.close();
+        }
+        None => {}
+    }
 }
