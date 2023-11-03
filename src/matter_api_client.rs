@@ -4,7 +4,7 @@ use tungstenite::{connect, Message, WebSocket};
 
 use crate::messages::{
     Code, Commands, DatasetTLV, DatasetWifiCreds, MessageID, MessageWithArgs, MessageWithoutArgs,
-    NodeId,
+    NodeId, SetupPinCode,
 };
 
 pub struct MatterApiClient {
@@ -58,6 +58,23 @@ impl MatterApiClient {
         println!("Sending Thread Credentials to the WebSocket Endpoint of the Matter Server.");
         self.socket
             .send(Message::Text(msg_thread_credentials.to_string().into()))
+            .unwrap();
+        let msg = self.socket.read().expect("Error reading message");
+        println!("Received: {}", msg);
+    }
+
+    pub fn send_commission_on_network(&mut self, setup_pin_code: String) {
+        let msg_message_commission_code = MessageWithArgs {
+            message_id: MessageID::Two,
+            command: Commands::CommissionOnNetwork,
+            args: SetupPinCode { setup_pin_code },
+        };
+
+        let msg_commission_with_code = serde_json::to_string(&msg_message_commission_code).unwrap();
+
+        println!("Sending Commission with Code command");
+        self.socket
+            .send(Message::Text(msg_commission_with_code.to_string().into()))
             .unwrap();
         let msg = self.socket.read().expect("Error reading message");
         println!("Received: {}", msg);

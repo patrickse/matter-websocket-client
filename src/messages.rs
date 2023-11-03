@@ -78,3 +78,9 @@ pub struct Code {
 pub struct NodeId {
     pub node_id: String,
 }
+
+/// Contains Commissioning Code
+#[derive(Serialize, Deserialize)]
+pub struct SetupPinCode {
+    pub setup_pin_code: String,
+}

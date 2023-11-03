@@ -28,6 +28,12 @@ enum Commands {
         commission_code: String,
     },
 
+    #[command(about = "Commission a device on network", long_about = None)]
+    CommissionOnNetwork {
+        #[arg(short, help = "Matter Commission Code")]
+        setup_pin_code: String,
+    },
+
     #[command(about = "Open a commissioning window", long_about = None)]
     OpenCommissionWindow {
         #[arg(short, help = "Open Commissioning Window for Node")]
@@ -101,6 +107,11 @@ fn main() {
         Some(Commands::Test {}) => {
             let mut client = MatterApiClient::new(websocket_url);
             client.test();
+            client.close();
+        }
+        Some(Commands::CommissionOnNetwork { setup_pin_code }) => {
+            let mut client = MatterApiClient::new(websocket_url);
+            client.send_commission_on_network(setup_pin_code.to_string());
             client.close();
         }
         None => {}
